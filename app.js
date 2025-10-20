@@ -3,25 +3,76 @@ const express = require('express');
 require('dotenv').config();
 const cors = require('cors');
 const mysql = require('mysql2/promise');
+const helmet = require('helmet'); //Enhances security by setting various HTTP response headers
+const morgan = require('morgan'); //Middleware for logging details about incoming HTTP requests
+const port = process.env.PORT || 3000;
+const { query } = require('./config/database');
+//const salonRoutes = require("./routes/salonRoutes");
+const authRoutes = require("./modules/auth/routes")
+
 const app = express();
-const port = 3000;
-const salonRoutes = require("./routes/salonRoutes");
 
-import serviceAccount from "./firebase-service-account.json" assert { type: "json" };
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
-
-console.log("✅ Firebase Admin initialized");
-
-app.use(cors());
+app.use(helmet())
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
+app.use(express.json())
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-
-
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+app.use(morgan('dev'));
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use("/api/films", salonRoutes);
+app.use('/api/auth',authRoutes)
+
+app.use((req,res)=>{
+  res.status(404).json({error:"Not found"});
+});
+
+app.use((err, req, res, next) => { //Error handler
+  console.error('Error:', err);
+  
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+
+const startServer=async()=>{
+  try{
+    const dbCon=await db.testConnection()
+    if(!dbCon){
+      console.error("Failed to connect. Now exiting")
+      process.exit()
+    }
+    app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+  }
+  catch(error){
+    console.error('Failed to start server:', error);
+    process.exit(1);}
+}
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  await db.closePool();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  await db.closePool();
+  process.exit(0);
+});
+
+startServer();
+
+module.exports = app;
+
+
+
+//app.use("/api/films", salonRoutes);
