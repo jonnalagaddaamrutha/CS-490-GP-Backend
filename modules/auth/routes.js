@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('./controller');
-const { authenticateUser } = require('../../middleware/firebaseAuth');
+const authenticateUser = require('../../middleware/firebaseAuth');
+
+router.get('/test',authController.miscel);
 
 router.post('/signup', authController.signup);
 router.post('/login', authController.login);
