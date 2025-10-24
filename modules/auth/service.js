@@ -31,21 +31,24 @@ const firebaseSignIn = async (email, password) => {
     }
 }
 
-const firebaseSignUp = async (email, password) => {
+const firebaseSignUp = async (full_name, phone, userEmail, passWord, role) => {
     try {
         //const req.param
         const fbResponse = await axios.post(
             `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${process.env.FIREBASE_API_KEY}`,
-            { email: email, password: password, returnSecureToken: true }
+            { email: userEmail, password: passWord, returnSecureToken: true }
         );
+        console.log(fbResponse.data)
 
-        const { idToken, refreshToken, localId } = fbResponse.data;
+        const { idToken, email, refreshToken, expiresIn, localId } = fbResponse.data;
 
         try {
-            const rows = await db.query(`SELECT * FROM salon_platform_fbase.users WHERE user_id=?`, [localId]);
-            console.log(rows)
-            const user = rows && rows.length ? rows[0] : null;
-            return { idToken, refreshToken, user };
+            const rows = await db.query(`INSERT INTO salon_platform_fbase.users 
+                                        (user_id, full_name, phone, email, user_role)
+                                        VALUES (?,?,?,?,?)`, [localId, full_name, phone,email,role]);
+            const users = await db.query('SELECT * FROM salon_platform_fbase.users WHERE user_id = ?', [localId])
+            const user = users && users.length ? users[0] : null;
+            return { message: "Success",user:{ uid:localId, refreshToken, expiresIn, user }};
         }
         catch (error) {
             console.error('Failed to fetch staff for the salon', error);
