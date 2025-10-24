@@ -1,7 +1,7 @@
 const admin= require('../config/firebase');
 const { query } = require('../config/database');
 
-export const verifyFirebaseToken = async (req, res, next) => {
+exports.verifyFirebaseToken = async (req, res, next) => {
 
   try {
     //Extract token from header
@@ -72,4 +72,3 @@ export const verifyFirebaseToken = async (req, res, next) => {
   }
   catch(error){next()}
 }*/
-module.exports = verifyFirebaseToken;

@@ -5,10 +5,10 @@ const authenticateUser = require('../../middleware/firebaseAuth');
 
 router.get('/test',authController.miscel);
 
-router.post('/signup', authController.signup);
+//router.post('/signup', authController.signup);
 router.post('/login', authController.login);
 
-router.get('/me', authenticateUser, authController.getCurrentUser);
-router.post('/logout', authenticateUser, authController.logout);
+//router.get('/me', authenticateUser, authController.getCurrentUser);
+//router.post('/logout', authenticateUser, authController.logout);
 
 module.exports = router;
