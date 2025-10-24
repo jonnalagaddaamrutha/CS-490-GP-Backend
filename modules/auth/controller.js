@@ -1,7 +1,4 @@
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcrypt");
-const db = require("../../config/database");
-const admin = require("../../config/firebaseAdmin");
+const authService = require("./service");
 
 // ==========================
 // MANUAL SIGNUP
@@ -14,29 +11,12 @@ exports.signupManual = async (req, res) => {
   }
 
   try {
-    // Check if email already exists
-    const [existing] = await db.query("SELECT * FROM users WHERE email = ?", [
-      email,
-    ]);
-    if (existing.length > 0) {
+    const existingUser = await authService.findUserByEmail(email);
+    if (existingUser)
       return res.status(409).json({ error: "Email already registered" });
-    }
 
-    // Create user
-    const [userResult] = await db.query(
-      "INSERT INTO users (full_name, phone, email, user_role) VALUES (?, ?, ?, 'customer')",
-      [full_name, phone, email]
-    );
-    const userId = userResult.insertId;
-
-    // Hash password
-    const hash = await bcrypt.hash(password, 10);
-
-    // Create auth record
-    await db.query(
-      "INSERT INTO auth (user_id, email, password_hash) VALUES (?, ?, ?)",
-      [userId, email, hash]
-    );
+    const userId = await authService.createUser(full_name, phone, email);
+    await authService.createAuthRecord(userId, email, password);
 
     res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
@@ -50,39 +30,25 @@ exports.signupManual = async (req, res) => {
 // ==========================
 exports.loginManual = async (req, res) => {
   const { email, password } = req.body;
-
-  if (!email || !password) {
+  if (!email || !password)
     return res.status(400).json({ error: "Email and password required" });
-  }
 
   try {
-    const [rows] = await db.query(
-      "SELECT u.*, a.password_hash FROM users u JOIN auth a ON u.user_id = a.user_id WHERE u.email = ?",
-      [email]
-    );
-    const user = rows[0];
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    const user = await authService.findUserByEmail(email);
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Verify password
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) {
-      return res.status(401).json({ error: "Invalid password" });
-    }
-
-    // Update login stats
-    await db.query(
-      "UPDATE auth SET last_login = NOW(), login_count = login_count + 1 WHERE user_id = ?",
-      [user.user_id]
+    const valid = await authService.verifyPassword(
+      password,
+      user.password_hash
     );
+    if (!valid) return res.status(401).json({ error: "Invalid password" });
 
-    // Create JWT
-    const token = jwt.sign(
-      { user_id: user.user_id, email: user.email, role: user.user_role },
-      process.env.JWT_SECRET,
-      { expiresIn: "2h" }
-    );
+    await authService.updateLoginStats(user.user_id);
+    const token = authService.generateJwtToken({
+      user_id: user.user_id,
+      email: user.email,
+      role: user.user_role,
+    });
 
     res.json({ message: "Login successful", token });
   } catch (err) {
@@ -92,7 +58,7 @@ exports.loginManual = async (req, res) => {
 };
 
 // ==========================
-// EXISTING FIREBASE LOGIC
+// FIREBASE LOGIC
 // ==========================
 exports.verifyFirebase = async (req, res) => {
   try {
@@ -104,16 +70,8 @@ exports.verifyFirebase = async (req, res) => {
     if (!idToken)
       return res.status(401).json({ error: "Missing Firebase token" });
 
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    const customJwt = jwt.sign(
-      {
-        uid: decoded.uid,
-        email: decoded.email,
-        provider: decoded.firebase.sign_in_provider,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    );
+    const decoded = await authService.verifyFirebaseToken(idToken);
+    const customJwt = authService.generateFirebaseJwt(decoded);
 
     res.json({ token: customJwt });
   } catch (err) {
@@ -123,7 +81,7 @@ exports.verifyFirebase = async (req, res) => {
 };
 
 // ==========================
-// EXISTING LOGOUT + CURRENT USER
+// CURRENT USER + LOGOUT
 // ==========================
 exports.getCurrentUser = async (req, res) => {
   try {
