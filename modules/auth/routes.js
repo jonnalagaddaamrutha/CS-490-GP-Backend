@@ -3,16 +3,28 @@ const express = require("express");
 const router = express.Router();
 const authController = require("./controller");
 const { authenticateUser } = require("../../middleware/firebaseAuth");
+const { verifyCustomJwt } = require("../../middleware/verifyCustomJwt");
 const jwt = require("jsonwebtoken");
-const admin = require("../../config/firebaseAdmin"); // ✅ we'll make this next
+const admin = require("../../config/firebaseAdmin");
 
-// Existing routes
-router.post("/signup", authController.signup);
-router.post("/login", authController.login);
-router.get("/me", authenticateUser, authController.getCurrentUser);
-router.post("/logout", authenticateUser, authController.logout);
+// =============================
+// MANUAL EMAIL + PASSWORD AUTH
+// =============================
 
-// ✅ New route for Firebase token verification
+router.post("/signup", authController.signupManual);
+router.post("/login", authController.loginManual);
+
+router.get("/profile", verifyCustomJwt, (req, res) => {
+  res.json({
+    message: "Manual JWT verified successfully",
+    user: req.user,
+  });
+});
+
+// =============================
+// FIREBASE OAUTH AUTHENTICATION
+// =============================
+
 router.post("/verify-firebase", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
@@ -26,7 +38,7 @@ router.post("/verify-firebase", async (req, res) => {
     // Verify Firebase token
     const decoded = await admin.auth().verifyIdToken(idToken);
 
-    // Create your custom JWT
+    // Create your own JWT
     const customJwt = jwt.sign(
       {
         uid: decoded.uid,
@@ -43,5 +55,9 @@ router.post("/verify-firebase", async (req, res) => {
     res.status(401).json({ error: "Invalid Firebase token" });
   }
 });
+
+// Firebase-protected routes
+router.get("/me", authenticateUser, authController.getCurrentUser);
+router.post("/logout", authenticateUser, authController.logout);
 
 module.exports = router;
