@@ -1,4 +1,4 @@
-const admin = require("../config/firebaseAdmin"); // uses your firebaseAdmin.js setup
+const admin = require("../config/firebaseAdmin");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
@@ -21,11 +21,11 @@ const authenticateUser = async (req, res, next) => {
       return res.status(401).json({ error: "Missing Firebase token" });
     }
 
-    // ✅ Verify Firebase ID token
+    //Verify Firebase ID token
     const decoded = await admin.auth().verifyIdToken(idToken);
     req.firebaseUser = decoded; // save user info for controller access
 
-    // ✅ Optionally, create your own JWT for internal use
+    //Optionally, create your own JWT for internal use
     const customJwt = jwt.sign(
       { uid: decoded.uid, email: decoded.email },
       process.env.JWT_SECRET,
