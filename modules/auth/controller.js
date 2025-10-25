@@ -58,7 +58,7 @@ exports.loginManual = async (req, res) => {
 };
 
 // ==========================
-// FIREBASE LOGIC
+// FIREBASE VERIFY
 // ==========================
 exports.verifyFirebase = async (req, res) => {
   try {
@@ -71,12 +71,50 @@ exports.verifyFirebase = async (req, res) => {
       return res.status(401).json({ error: "Missing Firebase token" });
 
     const decoded = await authService.verifyFirebaseToken(idToken);
-    const customJwt = authService.generateFirebaseJwt(decoded);
+    const { uid, email } = decoded;
 
-    res.json({ token: customJwt });
+    // check if already exists
+    const existingUser = await authService.findFirebaseUser(uid, email);
+    if (existingUser) {
+      const token = authService.generateAppJwt({
+        user_id: existingUser.user_id,
+        email,
+        role: existingUser.user_role,
+      });
+      return res.json({
+        existingUser: true,
+        token,
+        role: existingUser.user_role,
+      });
+    }
+
+    // new user
+    return res.json({ newUser: true, firebaseUid: uid, email });
   } catch (err) {
     console.error("Firebase verification failed:", err);
     res.status(401).json({ error: "Invalid Firebase token" });
+  }
+};
+
+// ==========================
+// SET ROLE
+// ==========================
+exports.setRole = async (req, res) => {
+  try {
+    const { firebaseUid, email, role } = req.body;
+    if (!firebaseUid || !email || !role)
+      return res.status(400).json({ error: "Missing fields" });
+
+    const userId = await authService.createFirebaseUser(
+      firebaseUid,
+      email,
+      role
+    );
+    const token = authService.generateAppJwt({ user_id: userId, email, role });
+    res.status(201).json({ token, role });
+  } catch (err) {
+    console.error("Error setting role:", err);
+    res.status(500).json({ error: "Server error while setting role" });
   }
 };
 

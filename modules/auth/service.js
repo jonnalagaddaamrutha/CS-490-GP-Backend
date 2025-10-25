@@ -1,6 +1,6 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const db = require("../../config/database");
+const { db } = require("../../config/database");
 const admin = require("../../config/firebaseAdmin");
 
 // =====================
@@ -47,11 +47,31 @@ function generateJwtToken(payload, expiresIn = "2h") {
 }
 
 // =====================
-// FIREBASE HELPERS
+// FIREBASE HELPERS (EXTENDED FOR ROLE FLOW)
 // =====================
 
 async function verifyFirebaseToken(idToken) {
   return await admin.auth().verifyIdToken(idToken);
+}
+
+async function findFirebaseUser(firebaseUid, email) {
+  const [rows] = await db.query(
+    "SELECT user_id, user_role FROM users WHERE firebase_uid = ? OR email = ? LIMIT 1",
+    [firebaseUid, email]
+  );
+  return rows[0];
+}
+
+async function createFirebaseUser(firebaseUid, email, role) {
+  const [result] = await db.query(
+    "INSERT INTO users (firebase_uid, email, user_role) VALUES (?, ?, ?)",
+    [firebaseUid, email, role]
+  );
+  return result.insertId;
+}
+
+function generateAppJwt(payload, expiresIn = "2h") {
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn });
 }
 
 function generateFirebaseJwt(decoded) {
@@ -67,12 +87,18 @@ function generateFirebaseJwt(decoded) {
 }
 
 module.exports = {
+  // Manual
   findUserByEmail,
   createUser,
   createAuthRecord,
   verifyPassword,
   updateLoginStats,
   generateJwtToken,
+
+  // Firebase
   verifyFirebaseToken,
+  findFirebaseUser,
+  createFirebaseUser,
+  generateAppJwt,
   generateFirebaseJwt,
 };
